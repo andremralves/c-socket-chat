@@ -6,23 +6,53 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <stdlib.h>
-
 #include <sys/select.h>
-#include <time.h>
 #include <string.h>
 
-#define handle_error(msg) \
-    do { perror(msg); exit(EXIT_FAILURE); } while (0)
-
-#undef max
-#define max(x,y) ((x) > (y) ? (x) : (y))
+#include "utils.h"
 
 #define BUF_SIZE 256
 #define STDIN 0
-                       //
-char *get_current_time() {
-    time_t curr_time = time(NULL);
-    return strtok(ctime(&curr_time), "\n");
+
+int server_fd;
+int reuseaddr = 1;
+unsigned short port;
+char server_addr[20];
+int ready, nfds = 0;
+fd_set all_sockets, readfds;
+
+int client_rooms[1024] = {0};
+
+void send_msg_to_room(int sender_id, char *msg) {
+    int sender_room = client_rooms[sender_id];
+    for(int j=1; j<=nfds; j++) {
+        if(FD_ISSET(j, &all_sockets)) {
+            if(j != server_fd && j != sender_id && client_rooms[j] == sender_room) {
+                if(send(j, msg, strlen(msg), 0) < 0) {
+                    handle_error("send");
+                }
+            }
+        }
+    }
+}
+
+void handle_request(int client_fd, char *request) {
+    if(request[0] == '/') {
+        char *token = strtok(request, " ");
+        if(strcmp(token, "/join") == 0) {
+            token = strtok(NULL, token);
+            int room_id = atoi(token);
+            if(room_id == 0) {
+                //handle invalid room_id
+            } else {
+                client_rooms[client_fd] = room_id;
+            }
+        } else if(strcmp(token, "/exit") == 0) {
+            client_rooms[client_fd] = 0;
+        }
+    } else {
+        send_msg_to_room(client_fd, request);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -31,11 +61,6 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Usage: %s addr port\n", argv[0]);
         exit(1);
     }
-
-    int server_fd;
-    int reuseaddr = 1;
-    unsigned short port;
-    char server_addr[20];
 
     port = (unsigned short) atoi(argv[2]);
     strcpy(server_addr, argv[1]);
@@ -63,10 +88,6 @@ int main(int argc, char *argv[]) {
         handle_error("listen");
     }
 
-    int ready, nfds = 0;
-    fd_set all_sockets, readfds;
-
-    // Init SET
     FD_ZERO(&all_sockets);
     FD_SET(server_fd, &all_sockets);
     FD_SET(STDIN, &all_sockets);
@@ -96,20 +117,10 @@ int main(int argc, char *argv[]) {
                 } else {
                     // Client message
                     char request[BUF_SIZE] = {0};
-                    printf("%d\n", i);
                     if(recv(i, request, sizeof(request), 0) < 0) {
                         handle_error("recv");
                     }
-                    // send data to other clients
-                    for(int j=1; j<=nfds; j++) {
-                        if(FD_ISSET(j, &all_sockets)) {
-                            if(j != server_fd && j != i) {
-                                if(send(j, request, sizeof(request), 0) < 0) {
-                                    handle_error("send");
-                                }
-                            }
-                        }
-                    }
+                    handle_request(i, request);
                 }
             }
         }
