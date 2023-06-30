@@ -112,6 +112,12 @@ int main(int argc, char *argv[]) {
                         handle_error("accept");
                     }
                     printf("[%s] %s:%d connected\n", get_current_time(), inet_ntoa(client.sin_addr), ntohs(client.sin_port));
+
+                    char welcome_msg[] = "Bem-vindo ao Chat_Fundamento de Redes! Você pode usar os seguintes comandos:\n/join <sala>: entra em uma sala\n/exit: sai da sala\n";
+                    if(send(client_fd, welcome_msg, strlen(welcome_msg), 0) < 0) {
+                        handle_error("send");
+                    }
+                    
                     FD_SET(client_fd, &all_sockets);
                     nfds = max(client_fd, nfds);
                 } else {
