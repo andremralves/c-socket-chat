@@ -23,6 +23,7 @@ fd_set all_sockets, readfds;
 
 int client_rooms[1024] = {0};
 
+//Função que envia uma mensagem para todos os clientes na mesma sala, exceto o remetente.
 void send_msg_to_room(int sender_id, char *msg) {
     int sender_room = client_rooms[sender_id];
     for(int j=1; j<=nfds; j++) {
@@ -37,20 +38,31 @@ void send_msg_to_room(int sender_id, char *msg) {
 }
 
 void handle_request(int client_fd, char *request) {
+    // Verificar se a requisição é um comando
     if(request[0] == '/') {
+
         char *token = strtok(request, " ");
+
         if(strcmp(token, "/join") == 0) {
             token = strtok(NULL, token);
             int room_id = atoi(token);
+
+            // Verificar se o ID da sala é válid
             if(room_id == 0) {
                 //handle invalid room_id
-            } else {
+            } 
+            else {
                 client_rooms[client_fd] = room_id;
             }
-        } else if(strcmp(token, "/exit") == 0) {
+        } 
+
+        else if(strcmp(token, "/exit") == 0) {
+            // Comando "/exit", o cliente sai da sala atual
             client_rooms[client_fd] = 0;
         }
-    } else {
+    } 
+    else {
+        // A requisição é uma mensagem, enviar para a sala
         send_msg_to_room(client_fd, request);
     }
 }
@@ -61,6 +73,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Usage: %s addr port\n", argv[0]);
         exit(1);
     }
+
     port = (unsigned short) atoi(argv[2]);
     strcpy(server_addr, argv[1]);
 
@@ -70,19 +83,24 @@ int main(int argc, char *argv[]) {
         .sin_addr.s_addr = inet_addr(server_addr)
     };
 
+    // Criar o socket do servidor
     if((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         handle_error("socket");
     }
 
+    // Configurar a opção SO_REUSEADDR para permitir a reutilização do endereço
     if(setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(reuseaddr)) < 0) {
         handle_error("setsockopt");
     }
-
+    
+    // Associar o socket ao endereço do servidor
     if((bind(server_fd, (struct sockaddr *)&server, sizeof(server))) < 0) {
         handle_error("bind");
     }
 
     printf("Listening on %s:%d\n", server_addr, port);
+
+    // Iniciar a escuta por conexões de clientes
     if(listen(server_fd, 10) < 0) {
         handle_error("listen");
     }
@@ -103,15 +121,17 @@ int main(int argc, char *argv[]) {
         for(int i=0; i<=nfds; i++) {
             if(FD_ISSET(i, &readfds)) {
                 if(i == server_fd) {
-                    // Server socket: new client connection
+                    // Socket do servidor: nova conexão de cliente
                     int client_fd;
                     struct sockaddr_in client;
                     socklen_t client_len = sizeof(client);
+
                     if((client_fd = accept(server_fd, (struct sockaddr *)&client, &client_len)) < 0) {
                         handle_error("accept");
                     }
                     printf("[%s] %s:%d connected\n", get_current_time(), inet_ntoa(client.sin_addr), ntohs(client.sin_port));
 
+                    // Enviar uma mensagem de boas-vindas para o cliente
                     char welcome_msg[] = "Bem-vindo ao Chat_Fundamento de Redes! Você pode usar os seguintes comandos:\n/join <sala>: entra em uma sala\n/exit: sai da sala\n";
                     if(send(client_fd, welcome_msg, strlen(welcome_msg), 0) < 0) {
                         handle_error("send");
@@ -119,12 +139,15 @@ int main(int argc, char *argv[]) {
                     
                     FD_SET(client_fd, &all_sockets);
                     nfds = max(client_fd, nfds);
-                } else {
-                    // Client message
+                } 
+                else 
+                {
+                    // Mensagem de cliente
                     char request[BUF_SIZE] = {0};
                     if(recv(i, request, sizeof(request), 0) < 0) {
                         handle_error("recv");
                     }
+                    // Tratar a requisição recebida do cliente
                     handle_request(i, request);
                 }
             }
