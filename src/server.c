@@ -46,9 +46,19 @@ void handle_request(int client_fd, char *request) {
                 //handle invalid room_id
             } else {
                 client_rooms[client_fd] = room_id;
+                char msg[40]; 
+                sprintf(msg, "Você está na sala %d\n", room_id);
+                if(send(client_fd, msg, strlen(msg), 0) < 0) {
+                    handle_error("send");
+                }
             }
-        } else if(strcmp(token, "/exit") == 0) {
+        } else if(strncmp(token, "/exit", 5) == 0) {
+            char msg[70]; 
+            sprintf(msg, "Você saiu da sala %d e agora está no chat global\n", client_rooms[client_fd]);
             client_rooms[client_fd] = 0;
+            if(send(client_fd, msg, strlen(msg), 0) < 0) {
+                handle_error("send");
+            }
         }
     } else {
         send_msg_to_room(client_fd, request);
